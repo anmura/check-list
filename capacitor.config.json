@@ -1,0 +1,14 @@
+{
+  "appId": "io.github.anmura.checklist",
+  "appName": "Покупки",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#F7F6F0"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_list",
+      "iconColor": "#F5C518"
+    }
+  }
+}

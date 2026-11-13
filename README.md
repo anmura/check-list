@@ -34,20 +34,20 @@ git push origin v1.0.1
 
 ### Подпись
 
-Чтобы новые версии устанавливались поверх старых без потери данных, APK подписывается одним и тем же ключом. Ключ хранится в секретах репозитория (Settings → Secrets and variables → Actions):
+Чтобы новые версии устанавливались поверх старых без потери данных, APK всегда подписывается одним ключом. Ключ хранится только в секретах репозитория (Settings → Secrets and variables → Actions), в самом репозитории его нет:
 
-- `ANDROID_KEYSTORE_BASE64` — файл ключа в base64,
-- `ANDROID_KEYSTORE_PASSWORD` — пароль (alias ключа: `checklist`).
+- `ANDROID_KEYSTORE_BASE64` — файл ключа (PKCS12) в base64,
+- `ANDROID_KEYSTORE_PASSWORD` — пароль от него. Alias ключа: `checklist`.
 
-Создать ключ:
+Создать новый ключ:
 
 ```sh
-keytool -genkeypair -keystore release.jks -storetype PKCS12 -alias checklist \
+keytool -genkeypair -keystore release.p12 -storetype PKCS12 -alias checklist \
   -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 release.jks   # содержимое для ANDROID_KEYSTORE_BASE64
+base64 -w0 release.p12   # содержимое для ANDROID_KEYSTORE_BASE64
 ```
 
-Без этих секретов сборка всё равно пройдёт, но с одноразовым ключом, и следующую версию придётся ставить после удаления старой.
+Без этих секретов сборка всё равно пройдёт, но с одноразовым ключом, и следующую версию придётся ставить после удаления старой. Сохраните файл ключа и пароль у себя: если их потерять, обновление поверх старой версии станет невозможно.
 
 ### Проверка в браузере
 

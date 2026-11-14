@@ -182,6 +182,37 @@ const ui = {
 
 const app = document.getElementById('app');
 
+/* The screen the user was on is saved, so that after switching to another app
+   (Android may close this one in the background) the same list opens again. */
+const UI_KEY = 'checklist.ui';
+let uiScroll = 0;
+function saveUi() {
+  if (ui.screen === 'edit' || ui.screen === 'new') {
+    const ed = document.getElementById('text') ? readEditor() : null;
+    if (ed) ui.draft = ed;
+  }
+  const raw = JSON.stringify({ screen: ui.screen, listId: ui.listId, draft: ui.draft, scroll: uiScroll });
+  try { localStorage.setItem(UI_KEY, raw); } catch (e) { /* ignore */ }
+  if (Prefs) Prefs.set({ key: UI_KEY, value: raw }).catch(() => {});
+}
+async function loadUi() {
+  let raw = null;
+  try { if (Prefs) raw = (await Prefs.get({ key: UI_KEY })).value; } catch (e) { /* ignore */ }
+  if (!raw) { try { raw = localStorage.getItem(UI_KEY); } catch (e) { /* ignore */ } }
+  if (!raw) return;
+  try {
+    const st = JSON.parse(raw);
+    if (!['lists', 'list', 'edit', 'new'].includes(st.screen)) return;
+    if ((st.screen === 'list' || st.screen === 'edit') && !byId(st.listId)) return;
+    ui.screen = st.screen;
+    ui.listId = st.listId || null;
+    ui.draft = st.draft || null;
+    uiScroll = st.scroll || 0;
+  } catch (e) { /* start from the lists */ }
+}
+let uiTimer = null;
+function saveUiSoon() { clearTimeout(uiTimer); uiTimer = setTimeout(saveUi, 300); }
+
 function go(screen, listId) {
   ui.screen = screen;
   if (listId !== undefined) ui.listId = listId;
@@ -189,9 +220,11 @@ function go(screen, listId) {
   ui.confirmDelete = false;
   ui.ordering = false;
   ui.draft = null;
+  uiScroll = 0;
   render();
   const body = app.querySelector('.body');
   if (body) body.scrollTop = 0;
+  saveUi();
 }
 
 function render() {
@@ -306,19 +339,20 @@ function renderEdit(list) {
 }
 
 function renderNew() {
+  const d = ui.draft || { name: '', text: '' };
   return `<div class="screen">
     <header class="head">
       <button class="back" data-act="lists">${I.back()}Отмена</button>
       <div class="row">
         <label for="name" class="sr">Название списка</label>
-        <input id="name" class="title-input" placeholder="Название" autocomplete="off" enterkeyhint="next">
+        <input id="name" class="title-input" placeholder="Название" value="${esc(d.name)}" autocomplete="off" enterkeyhint="next">
         <button class="pill primary" data-act="create">${I.check(18, 2.6)}Создать</button>
       </div>
       <p class="hint">Один товар на строку. Пустая строка — отступ между группами.</p>
     </header>
     <div class="edit-body">
       <label for="text" class="sr">Товары</label>
-      <textarea id="text" class="text" spellcheck="true" autocapitalize="sentences" placeholder="Например:&#10;Хлеб&#10;Молоко&#10;&#10;Губки для посуды"></textarea>
+      <textarea id="text" class="text" spellcheck="true" autocapitalize="sentences" placeholder="Например:&#10;Хлеб&#10;Молоко&#10;&#10;Губки для посуды">${esc(d.text)}</textarea>
     </div>
   </div>`;
 }
@@ -482,6 +516,20 @@ app.addEventListener('change', (e) => {
   save(); render();
 });
 
+app.addEventListener('input', (e) => {
+  if (e.target.id === 'name' || e.target.id === 'text') saveUiSoon();
+});
+
+app.addEventListener('scroll', (e) => {
+  if (e.target.classList && e.target.classList.contains('body') && ui.screen === 'list') {
+    uiScroll = e.target.scrollTop;
+    saveUiSoon();
+  }
+}, true);
+
+window.addEventListener('pagehide', saveUi);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveUi(); });
+
 app.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.id === 'name') {
     e.preventDefault();
@@ -492,7 +540,12 @@ app.addEventListener('keydown', (e) => {
 /* ---------- Start ---------- */
 (async function start() {
   await load();
+  await loadUi();
   render();
+  if (ui.screen === 'list' && uiScroll) {
+    const body = app.querySelector('.body');
+    if (body) body.scrollTop = uiScroll;
+  }
 
   if (StatusBar) {
     StatusBar.setBackgroundColor({ color: '#F7F6F0' }).catch(() => {});
@@ -503,7 +556,7 @@ app.addEventListener('keydown', (e) => {
     AppPlugin.addListener('backButton', () => {
       if (!back()) AppPlugin.minimizeApp ? AppPlugin.minimizeApp() : AppPlugin.exitApp();
     });
-    AppPlugin.addListener('resume', () => { if (!ui.sheet && (ui.screen === 'lists' || ui.screen === 'list')) render(); });
+    AppPlugin.addListener('pause', saveUi);
   }
 
   if (LN) {

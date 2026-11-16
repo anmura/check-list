@@ -272,7 +272,7 @@ function renderLists() {
     ? `<button class="pill primary" data-act="order">${I.check(18, 2.6)}Готово</button>`
     : (n > 1 ? `<button class="pill" data-act="order">${I.order()}Порядок</button>` : '');
   return `<div class="screen">
-    <header class="head top"><div class="row"><h1>Списки</h1>${action}</div></header>
+    <header class="head top">${action ? `<div class="row" style="justify-content:flex-end">${action}</div>` : ''}</header>
     <main class="body">${body}</main>
   </div>`;
 }

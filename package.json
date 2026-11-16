@@ -1,6 +1,6 @@
 {
   "name": "check-list",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "Простое приложение для списков покупок с напоминаниями",
   "scripts": {

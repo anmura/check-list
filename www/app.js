@@ -328,7 +328,6 @@ function renderEdit(list) {
         <input id="name" class="title-input" value="${esc(d.name)}" autocomplete="off" enterkeyhint="done">
         <button class="pill primary" data-act="save">${I.check(18, 2.6)}Готово</button>
       </div>
-      <p class="hint">Один товар на строку. Пустая строка — отступ между группами.</p>
     </header>
     <div class="edit-body">
       <label for="text" class="sr">Товары</label>
@@ -348,7 +347,6 @@ function renderNew() {
         <input id="name" class="title-input" placeholder="Название" value="${esc(d.name)}" autocomplete="off" enterkeyhint="next">
         <button class="pill primary" data-act="create">${I.check(18, 2.6)}Создать</button>
       </div>
-      <p class="hint">Один товар на строку. Пустая строка — отступ между группами.</p>
     </header>
     <div class="edit-body">
       <label for="text" class="sr">Товары</label>
@@ -394,7 +392,7 @@ function renderSheet(list) {
         : `<div class="note warn"><span>Время «до» должно быть позже, чем «с».</span></div>`}`;
   }
   const perm = ui.permError
-    ? `<div class="note warn"><span>Уведомления запрещены. Разрешите их для приложения «Покупки» в настройках телефона.</span></div>`
+    ? `<div class="note warn"><span>Уведомления запрещены. Разрешите их для приложения «Списки» в настройках телефона.</span></div>`
     : '';
   const browser = !LN && r.on
     ? `<div class="note warn"><span>В браузере уведомления не приходят. Установите приложение на телефон.</span></div>`

@@ -1,6 +1,6 @@
 {
   "appId": "io.github.anmura.checklist",
-  "appName": "Покупки",
+  "appName": "Списки",
   "webDir": "www",
   "android": {
     "backgroundColor": "#F7F6F0"

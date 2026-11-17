@@ -83,10 +83,17 @@ h1 {
 /* Items */
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 8px 0; }
 .item {
-  width: 100%; display: flex; align-items: center; gap: 12px; min-height: 32px;
-  padding: 4px 18px; background: transparent; border: 0; text-align: left;
+  width: 100%; display: flex; align-items: center; gap: 2px; min-height: 32px;
+  padding: 0 18px 0 7px; text-align: left;
   user-select: none; -webkit-user-select: none;
 }
+/* Only the checkbox toggles; its tap area is larger than the drawn box. */
+.tick {
+  width: 40px; min-height: 32px; align-self: stretch; flex: none; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0;
+}
+.item .name { padding: 4px 0; }
 .box {
   width: 18px; height: 18px; flex: none; border-radius: 4px; border: 1.5px solid var(--box);
   display: flex; align-items: center; justify-content: center; color: transparent;

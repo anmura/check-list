@@ -276,9 +276,9 @@ function renderList(list) {
     body = '<div class="card">' + rows.map((row) => {
       if (row.gap) return '<div class="gap"></div>';
       const d = !!list.done[row.name];
-      return `<button class="item${d ? ' done' : ''}" data-act="toggle" data-name="${esc(row.name)}" aria-pressed="${d}">
-          <span class="box">${I.check(11, 3.4)}</span><span class="name">${esc(row.name)}</span>
-        </button>`;
+      return `<div class="item${d ? ' done' : ''}">
+          <button class="tick" data-act="toggle" data-name="${esc(row.name)}" role="checkbox" aria-checked="${d}" aria-label="${esc(row.name)}"><span class="box">${I.check(11, 3.4)}</span></button><span class="name">${esc(row.name)}</span>
+        </div>`;
     }).join('') + '</div>' +
       (s.done ? `<div class="foot"><button class="ghost" data-act="reset">${I.reset()}Снять все отметки</button></div>` : '');
   }

@@ -232,6 +232,58 @@ function render() {
   else if (ui.screen === 'new') html = renderNew();
   if (ui.sheet && list) html += renderSheet(list);
   app.innerHTML = html;
+  syncEditor();
+}
+
+/* ---------- Text editor with a checkbox at the start of every item ----------
+   The textarea stays a plain text field. Under it a copy of the text is drawn
+   line by line (so done items can be struck through), and a checkbox is placed
+   next to the first visual line of every item. Wrapped continuations and empty
+   lines get no checkbox. */
+const ED_PAD_TOP = 12;
+const ED_LINE = 32;   // line height, px
+const ED_BOX = 18;
+
+function editorHtml(text, placeholder) {
+  return `<div class="editor">
+      <div class="ed-gutter"><div class="ed-boxes"></div></div>
+      <div class="ed-back" aria-hidden="true"><div class="ed-lines"></div></div>
+      <textarea id="text" class="text" spellcheck="true" autocapitalize="sentences"${placeholder ? ` placeholder="${placeholder}"` : ''}>${esc(text)}</textarea>
+    </div>`;
+}
+
+function syncEditor() {
+  const ta = document.getElementById('text');
+  const linesEl = app.querySelector('.ed-lines');
+  const boxesEl = app.querySelector('.ed-boxes');
+  if (!ta || !linesEl || !boxesEl) return;
+  const list = ui.screen === 'edit' ? byId(ui.listId) : null;
+  const done = (list && list.done) || {};
+  const lines = ta.value.split('\n');
+  linesEl.innerHTML = lines.map((line) => {
+    const name = line.trim();
+    return `<div class="ed-line${name && done[name] ? ' done' : ''}">${line ? esc(line) : '\u200b'}</div>`;
+  }).join('');
+  const rows = linesEl.children;
+  let boxes = '';
+  lines.forEach((line, i) => {
+    const name = line.trim();
+    if (!name) return;
+    const d = !!done[name];
+    const top = ED_PAD_TOP + rows[i].offsetTop + (ED_LINE - ED_BOX) / 2;
+    boxes += `<button class="ed-box${d ? ' on' : ''}" style="top:${top}px" data-act="${list ? 'etoggle' : ''}" data-name="${esc(name)}" role="checkbox" aria-checked="${d}" aria-label="${esc(name)}" tabindex="-1">${I.check(11, 3.4)}</button>`;
+  });
+  boxesEl.innerHTML = boxes;
+  scrollEditor();
+}
+
+function scrollEditor() {
+  const ta = document.getElementById('text');
+  if (!ta) return;
+  const t = `translateY(${-ta.scrollTop}px)`;
+  const l = app.querySelector('.ed-lines'), b = app.querySelector('.ed-boxes');
+  if (l) l.style.transform = t;
+  if (b) b.style.transform = t;
 }
 
 /* ---------- Screens ---------- */
@@ -315,7 +367,7 @@ function renderEdit(list) {
     </header>
     <div class="edit-body">
       <label for="text" class="sr">Товары</label>
-      <textarea id="text" class="text" spellcheck="true" autocapitalize="sentences">${esc(d.text)}</textarea>
+      ${editorHtml(d.text, '')}
       ${del}
     </div>
   </div>`;
@@ -334,7 +386,7 @@ function renderNew() {
     </header>
     <div class="edit-body">
       <label for="text" class="sr">Товары</label>
-      <textarea id="text" class="text" spellcheck="true" autocapitalize="sentences" placeholder="Например:&#10;Хлеб&#10;Молоко&#10;&#10;Губки для посуды">${esc(d.text)}</textarea>
+      ${editorHtml(d.text, 'Например:&#10;Хлеб&#10;Молоко&#10;&#10;Губки для посуды')}
     </div>
   </div>`;
 }
@@ -444,6 +496,14 @@ app.addEventListener('click', async (e) => {
     case 'edit': return go('edit');
     case 'save': return saveEdit();
     case 'create': return createList();
+    case 'etoggle': {
+      if (!list) return;
+      const name = el.dataset.name;
+      if (list.done[name]) delete list.done[name]; else list.done[name] = true;
+      save();
+      syncEditor();
+      return;
+    }
     case 'toggle': {
       const name = el.dataset.name;
       if (list.done[name]) delete list.done[name]; else list.done[name] = true;
@@ -488,8 +548,13 @@ app.addEventListener('change', (e) => {
 });
 
 app.addEventListener('input', (e) => {
+  if (e.target.id === 'text') syncEditor();
   if (e.target.id === 'name' || e.target.id === 'text') saveUiSoon();
 });
+app.addEventListener('scroll', (e) => { if (e.target.id === 'text') scrollEditor(); }, true);
+window.addEventListener('resize', () => syncEditor());
+// Tapping a checkbox in the editor must not close the keyboard.
+app.addEventListener('mousedown', (e) => { if (e.target.closest('.ed-box')) e.preventDefault(); });
 
 app.addEventListener('scroll', (e) => {
   if (e.target.classList && e.target.classList.contains('body') && ui.screen === 'list') {

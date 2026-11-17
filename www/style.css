@@ -145,11 +145,34 @@ h1 {
   font-size: 26px; letter-spacing: -0.5px; outline: none; border-radius: 0;
 }
 .edit-body { flex: 1; min-height: 0; padding: 4px 14px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 6px; }
-textarea.text {
-  flex: 1; min-height: 160px; width: 100%; resize: none; background: var(--card);
-  border: 2px solid var(--accent); border-radius: 22px; padding: 16px 20px;
-  font-size: 16px; font-weight: 500; line-height: 2; outline: none;
+.editor {
+  position: relative; flex: 1; min-height: 160px; background: var(--card);
+  border: 2px solid var(--accent); border-radius: 22px; overflow: hidden;
 }
+.editor textarea.text, .ed-back {
+  position: absolute; top: 0; bottom: 0; left: 36px; right: 0; margin: 0;
+  padding: 12px 18px 12px 4px; font-family: var(--body); font-size: 16px; font-weight: 500;
+  line-height: 32px; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+  tab-size: 4; box-sizing: border-box;
+}
+.editor textarea.text {
+  width: auto; height: auto; resize: none; background: transparent; border: 0; outline: none;
+  color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--ink);
+  overflow-y: auto; z-index: 1; scrollbar-width: none;
+}
+.editor textarea.text::placeholder { color: var(--placeholder); -webkit-text-fill-color: var(--placeholder); }
+.ed-back { overflow: hidden; pointer-events: none; color: var(--ink); }
+.ed-lines { position: relative; }
+.ed-line.done { color: var(--done); text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.ed-gutter { position: absolute; top: 0; bottom: 0; left: 0; width: 36px; overflow: hidden; z-index: 2; }
+.ed-boxes { position: relative; }
+.ed-box {
+  position: absolute; left: 14px; width: 18px; height: 18px; padding: 0; box-sizing: border-box;
+  border-radius: 4px; border: 1.5px solid var(--box); background: var(--card);
+  display: flex; align-items: center; justify-content: center; color: transparent;
+}
+.ed-box::before { content: ""; position: absolute; inset: -7px -9px -7px -10px; }
+.ed-box.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 ::placeholder { color: var(--placeholder); opacity: 1; }
 .delete { align-self: center; color: var(--danger); }
 .confirm { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
@@ -204,3 +227,4 @@ textarea.text {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.editor textarea.text::-webkit-scrollbar { display: none; }

@@ -23,9 +23,6 @@ const I = {
   reset: () => svg(18, '<path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path>'),
   chev: () => svg(20, '<path d="M9 5l7 7-7 7"></path>'),
   plus: () => svg(20, '<path d="M12 5v14"></path><path d="M5 12h14"></path>', 2.4),
-  up: () => svg(22, '<path d="M12 19V5"></path><path d="M5.5 11.5L12 5l6.5 6.5"></path>', 2.2),
-  down: () => svg(22, '<path d="M12 5v14"></path><path d="M5.5 12.5L12 19l6.5-6.5"></path>', 2.2),
-  order: () => svg(18, '<path d="M7 4v16"></path><path d="M3.5 7.5L7 4l3.5 3.5"></path><path d="M17 20V4"></path><path d="M13.5 16.5L17 20l3.5-3.5"></path>'),
 };
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -173,7 +170,6 @@ async function ensurePermission() {
 const ui = {
   screen: 'lists',  // lists | list | edit | new
   listId: null,
-  ordering: false,
   sheet: false,
   confirmDelete: false,
   permError: false,
@@ -218,7 +214,6 @@ function go(screen, listId) {
   if (listId !== undefined) ui.listId = listId;
   ui.sheet = false;
   ui.confirmDelete = false;
-  ui.ordering = false;
   ui.draft = null;
   uiScroll = 0;
   render();
@@ -246,14 +241,6 @@ function renderLists() {
   if (!n) {
     body = `<div class="empty"><p>Здесь будут ваши списки: продукты, аптека, дела на даче.</p>
       <button class="new-list" data-act="new">${I.plus()}Создать первый список</button></div>`;
-  } else if (ui.ordering) {
-    body = `<p class="hint" style="margin: 0 8px 10px">Стрелками поднимите или опустите список.</p><div class="lists">` +
-      data.lists.map((l, i) => `
-        <div class="list-card order-card">
-          <span class="title"><span>${esc(l.name)}</span></span>
-          <button class="arrow" data-act="up" data-i="${i}" aria-label="Поднять ${esc(l.name)}" ${i === 0 ? 'disabled' : ''}>${I.up()}</button>
-          <button class="arrow" data-act="down" data-i="${i}" aria-label="Опустить ${esc(l.name)}" ${i === n - 1 ? 'disabled' : ''}>${I.down()}</button>
-        </div>`).join('') + '</div>';
   } else {
     body = '<div class="lists">' + data.lists.map((l) => {
       const s = stats(l);
@@ -268,11 +255,8 @@ function renderLists() {
         </button>`;
     }).join('') + `<button class="new-list" data-act="new">${I.plus()}Новый список</button></div>`;
   }
-  const action = !n ? '' : ui.ordering
-    ? `<button class="pill primary" data-act="order">${I.check(18, 2.6)}Готово</button>`
-    : (n > 1 ? `<button class="pill" data-act="order">${I.order()}Порядок</button>` : '');
   return `<div class="screen">
-    <header class="head top">${action ? `<div class="row" style="justify-content:flex-end">${action}</div>` : ''}</header>
+    <header class="head top"></header>
     <main class="body">${body}</main>
   </div>`;
 }
@@ -443,11 +427,11 @@ function back() {
   if (ui.screen === 'edit') { saveEdit(); return true; }
   if (ui.screen === 'new') { createList(); return true; }
   if (ui.screen === 'list') { go('lists'); return true; }
-  if (ui.ordering) { ui.ordering = false; render(); return true; }
   return false;
 }
 
 app.addEventListener('click', async (e) => {
+  if (suppressClick) { e.preventDefault(); e.stopPropagation(); return; }
   const el = e.target.closest('[data-act]');
   if (!el || el.disabled) return;
   const act = el.dataset.act;
@@ -460,17 +444,6 @@ app.addEventListener('click', async (e) => {
     case 'edit': return go('edit');
     case 'save': return saveEdit();
     case 'create': return createList();
-    case 'order': ui.ordering = !ui.ordering; return render();
-    case 'up':
-    case 'down': {
-      const i = +el.dataset.i, j = act === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= data.lists.length) return;
-      [data.lists[i], data.lists[j]] = [data.lists[j], data.lists[i]];
-      save(); render();
-      const btn = app.querySelector(`[data-act="${act}"][data-i="${j}"]`);
-      if (btn && !btn.disabled) btn.focus();
-      return;
-    }
     case 'toggle': {
       const name = el.dataset.name;
       if (list.done[name]) delete list.done[name]; else list.done[name] = true;
@@ -534,6 +507,125 @@ app.addEventListener('keydown', (e) => {
     document.getElementById('text')?.focus();
   }
 });
+
+/* ---------- Reorder lists: hold a card, then drag ---------- */
+const HOLD_MS = 350;     // how long to hold before the card lifts
+const MOVE_TOL = 8;      // finger movement that means "scrolling", not holding
+const EDGE = 80;         // distance from the top/bottom edge where auto-scroll starts
+const MAX_SPEED = 16;    // auto-scroll speed, px per frame
+let press = null;
+let drag = null;
+let suppressClick = false;
+let lastTouch = 0;
+
+const pointOf = (e) => {
+  const t = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
+  return { x: t.clientX, y: t.clientY };
+};
+
+function pressStart(e) {
+  if (ui.screen !== 'lists' || drag) return;
+  if (e.type === 'mousedown' && (e.button !== 0 || Date.now() - lastTouch < 800)) return;
+  if (e.type === 'touchstart') lastTouch = Date.now();
+  const card = e.target.closest('.list-card[data-id]');
+  if (!card) return;
+  const p = pointOf(e);
+  press = { card, x: p.x, y: p.y };
+  press.timer = setTimeout(() => { if (press) startDrag(press.card, press.y); }, HOLD_MS);
+}
+
+function startDrag(card, y) {
+  const body = app.querySelector('.body');
+  const list = app.querySelector('.lists');
+  const cards = [...list.querySelectorAll('.list-card[data-id]')];
+  const from = cards.indexOf(card);
+  press = null;
+  if (from < 0 || cards.length < 2) return;
+  const gap = parseFloat(getComputedStyle(list).rowGap) || 14;
+  const slots = cards.map((c) => ({ top: c.offsetTop, h: c.offsetHeight }));
+  drag = { card, cards, from, to: from, slots, step: slots[from].h + gap, startY: y, y, body, startScroll: body.scrollTop };
+  list.classList.add('reordering');
+  card.classList.add('dragging');
+  try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) { /* ignore */ }
+  drag.raf = requestAnimationFrame(autoScroll);
+}
+
+function layoutDrag() {
+  const d = drag;
+  const dy = d.y - d.startY + (d.body.scrollTop - d.startScroll);
+  d.card.style.transform = `translateY(${dy}px) scale(1.02)`;
+  const center = d.slots[d.from].top + d.slots[d.from].h / 2 + dy;
+  let to = d.from;
+  for (let i = d.from + 1; i < d.slots.length; i++) if (center > d.slots[i].top + d.slots[i].h / 2) to = i;
+  for (let i = d.from - 1; i >= 0; i--) if (center < d.slots[i].top + d.slots[i].h / 2) to = i;
+  d.to = to;
+  d.cards.forEach((c, i) => {
+    if (i === d.from) return;
+    let shift = 0;
+    if (d.from < to && i > d.from && i <= to) shift = -d.step;
+    if (d.from > to && i < d.from && i >= to) shift = d.step;
+    c.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+}
+
+function autoScroll() {
+  if (!drag) return;
+  const r = drag.body.getBoundingClientRect();
+  let v = 0;
+  if (drag.y < r.top + EDGE) v = -MAX_SPEED * Math.min(1, (r.top + EDGE - drag.y) / EDGE);
+  else if (drag.y > r.bottom - EDGE) v = MAX_SPEED * Math.min(1, (drag.y - (r.bottom - EDGE)) / EDGE);
+  if (v) {
+    const before = drag.body.scrollTop;
+    drag.body.scrollTop = before + v;
+    if (drag.body.scrollTop !== before) layoutDrag();
+  }
+  drag.raf = requestAnimationFrame(autoScroll);
+}
+
+function pressMove(e) {
+  if (drag) {
+    if (e.cancelable) e.preventDefault(); // the page must not scroll under the finger
+    drag.y = pointOf(e).y;
+    layoutDrag();
+    return;
+  }
+  if (!press) return;
+  const p = pointOf(e);
+  if (Math.abs(p.x - press.x) > MOVE_TOL || Math.abs(p.y - press.y) > MOVE_TOL) {
+    clearTimeout(press.timer);
+    press = null;
+  } else {
+    press.y = p.y;
+  }
+}
+
+function pressEnd() {
+  if (press) { clearTimeout(press.timer); press = null; }
+  if (!drag) return;
+  const { from, to, body } = drag;
+  cancelAnimationFrame(drag.raf);
+  drag = null;
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 350);
+  const scroll = body.scrollTop;
+  if (from !== to) {
+    const [moved] = data.lists.splice(from, 1);
+    data.lists.splice(to, 0, moved);
+    save();
+  }
+  render();
+  const nb = app.querySelector('.body');
+  if (nb) nb.scrollTop = scroll;
+}
+
+app.addEventListener('touchstart', pressStart, { passive: true });
+document.addEventListener('touchmove', pressMove, { passive: false });
+document.addEventListener('touchend', pressEnd);
+document.addEventListener('touchcancel', pressEnd);
+app.addEventListener('mousedown', pressStart);
+document.addEventListener('mousemove', pressMove);
+document.addEventListener('mouseup', pressEnd);
+app.addEventListener('contextmenu', (e) => { if (e.target.closest('.list-card')) e.preventDefault(); });
 
 /* ---------- Start ---------- */
 (async function start() {

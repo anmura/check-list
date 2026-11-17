@@ -108,12 +108,15 @@ h1 {
 .empty p { margin: 0; color: var(--ink-3); font-size: 16px; line-height: 1.5; max-width: 30ch; }
 
 /* Lists screen */
-.lists { display: flex; flex-direction: column; gap: 14px; }
+.lists { display: flex; flex-direction: column; gap: 14px; position: relative; }
 .list-card {
   display: flex; align-items: center; gap: 14px; min-height: 76px; width: 100%;
   padding: 14px 16px 14px 20px; background: var(--card); border: 1px solid var(--line);
   border-radius: 20px; text-align: left;
 }
+.list-card { position: relative; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.lists.reordering .list-card { transition: transform .16s ease; }
+.lists.reordering .list-card.dragging { transition: none; z-index: 2; border-color: var(--accent); box-shadow: 0 12px 28px rgba(36, 34, 26, .18); }
 .list-card .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .list-card .title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; min-width: 0; }
 .list-card .title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -122,13 +125,6 @@ h1 {
 .list-card .meta .count { font-size: 13px; font-weight: 600; }
 .bell-mark { flex: none; color: #B88A00; }
 .chev { flex: none; color: var(--placeholder); }
-.order-card { padding: 10px 10px 10px 20px; gap: 10px; }
-.order-card .title { flex: 1; }
-.arrow {
-  width: 48px; height: 48px; flex: none; border-radius: 14px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--ink); display: flex; align-items: center; justify-content: center; padding: 0;
-}
-.arrow:disabled { color: var(--box); cursor: default; }
 .new-list {
   display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 64px; width: 100%;
   border: 2px dashed var(--box); border-radius: 20px; background: transparent;

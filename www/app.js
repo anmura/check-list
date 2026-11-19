@@ -692,6 +692,135 @@ document.addEventListener('mousemove', pressMove);
 document.addEventListener('mouseup', pressEnd);
 app.addEventListener('contextmenu', (e) => { if (e.target.closest('.list-card')) e.preventDefault(); });
 
+/* ---------- Move items in the editor: hold a checkbox, then drag ---------- */
+let edPress = null;
+let edDrag = null;
+
+function edLineRows() {
+  const linesEl = app.querySelector('.ed-lines');
+  return linesEl ? [...linesEl.children].map((r) => ({ top: ED_PAD_TOP + r.offsetTop, h: r.offsetHeight })) : [];
+}
+
+function edPressStart(e) {
+  if (edDrag || !(ui.screen === 'edit' || ui.screen === 'new')) return;
+  if (e.type === 'mousedown' && (e.button !== 0 || Date.now() - lastTouch < 800)) return;
+  const box = e.target.closest('.ed-box');
+  if (!box) return;
+  if (e.type === 'touchstart') lastTouch = Date.now();
+  const p = pointOf(e);
+  edPress = { box, x: p.x, y: p.y };
+  edPress.timer = setTimeout(() => { if (edPress) edStartDrag(edPress.box, edPress.y); }, HOLD_MS);
+}
+
+function edStartDrag(box, y) {
+  edPress = null;
+  const ta = document.getElementById('text');
+  const editor = app.querySelector('.editor');
+  if (!ta || !editor) return;
+  const lines = ta.value.split('\n');
+  const boxes = [...app.querySelectorAll('.ed-box')];
+  // the n-th checkbox belongs to the n-th non-empty line
+  const nonEmpty = lines.map((l, i) => (l.trim() ? i : -1)).filter((i) => i >= 0);
+  const from = nonEmpty[boxes.indexOf(box)];
+  if (from === undefined) return;
+  const rows = edLineRows();
+  const er = editor.getBoundingClientRect();
+  const grab = (y - er.top + ta.scrollTop) - rows[from].top;
+  const ghost = document.createElement('div');
+  ghost.className = 'ed-ghost' + (box.classList.contains('on') ? ' on' : '');
+  ghost.innerHTML = `<span class="ed-box${box.classList.contains('on') ? ' on' : ''}">${I.check(11, 3.4)}</span><span class="ed-ghost-text"></span>`;
+  ghost.querySelector('.ed-ghost-text').textContent = lines[from].trim();
+  const drop = document.createElement('div');
+  drop.className = 'ed-drop';
+  editor.append(ghost, drop);
+  const lineEl = app.querySelector('.ed-lines').children[from];
+  if (lineEl) lineEl.classList.add('moving');
+  box.classList.add('moving');
+  ta.blur();
+  edDrag = { ta, editor, lines, from, to: from, rows, grab, ghost, drop, y };
+  try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) { /* ignore */ }
+  edLayout();
+  edDrag.raf = requestAnimationFrame(edAutoScroll);
+}
+
+function edLayout() {
+  const d = edDrag;
+  const er = d.editor.getBoundingClientRect();
+  const st = d.ta.scrollTop;
+  const contentY = d.y - er.top + st;
+  d.ghost.style.top = `${Math.max(0, Math.min(er.height - ED_LINE, contentY - d.grab - st))}px`;
+  // insertion point: before the first line whose middle is below the finger
+  let to = d.lines.length;
+  for (let k = 0; k < d.rows.length; k++) {
+    if (contentY < d.rows[k].top + d.rows[k].h / 2) { to = k; break; }
+  }
+  d.to = to;
+  const last = d.rows[d.rows.length - 1];
+  const lineTop = to < d.rows.length ? d.rows[to].top : last.top + last.h;
+  d.drop.style.top = `${lineTop - st - 1}px`;
+  d.drop.hidden = (to === d.from || to === d.from + 1);
+}
+
+function edAutoScroll() {
+  if (!edDrag) return;
+  const r = edDrag.editor.getBoundingClientRect();
+  let v = 0;
+  if (edDrag.y < r.top + EDGE * 0.6) v = -MAX_SPEED * Math.min(1, (r.top + EDGE * 0.6 - edDrag.y) / (EDGE * 0.6));
+  else if (edDrag.y > r.bottom - EDGE * 0.6) v = MAX_SPEED * Math.min(1, (edDrag.y - (r.bottom - EDGE * 0.6)) / (EDGE * 0.6));
+  if (v) {
+    const before = edDrag.ta.scrollTop;
+    edDrag.ta.scrollTop = before + v;
+    if (edDrag.ta.scrollTop !== before) { scrollEditor(); edLayout(); }
+  }
+  edDrag.raf = requestAnimationFrame(edAutoScroll);
+}
+
+function edPressMove(e) {
+  if (edDrag) {
+    if (e.cancelable) e.preventDefault();
+    edDrag.y = pointOf(e).y;
+    edLayout();
+    return;
+  }
+  if (!edPress) return;
+  const p = pointOf(e);
+  if (Math.abs(p.x - edPress.x) > MOVE_TOL || Math.abs(p.y - edPress.y) > MOVE_TOL) {
+    clearTimeout(edPress.timer);
+    edPress = null;
+  }
+}
+
+function edPressEnd() {
+  if (edPress) { clearTimeout(edPress.timer); edPress = null; }
+  if (!edDrag) return;
+  const { ta, lines, from, to, ghost, drop } = edDrag;
+  cancelAnimationFrame(edDrag.raf);
+  edDrag = null;
+  ghost.remove();
+  drop.remove();
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 350);
+  if (to !== from && to !== from + 1) {
+    const out = lines.slice();
+    const [moved] = out.splice(from, 1);
+    out.splice(to > from ? to - 1 : to, 0, moved);
+    const st = ta.scrollTop;
+    ta.value = out.join('\n');
+    ta.scrollTop = st;
+    saveUiSoon();
+  }
+  syncEditor();
+}
+
+app.addEventListener('touchstart', edPressStart, { passive: true });
+document.addEventListener('touchmove', edPressMove, { passive: false });
+document.addEventListener('touchend', edPressEnd);
+document.addEventListener('touchcancel', edPressEnd);
+app.addEventListener('mousedown', edPressStart);
+document.addEventListener('mousemove', edPressMove);
+document.addEventListener('mouseup', edPressEnd);
+app.addEventListener('contextmenu', (e) => { if (e.target.closest('.ed-box')) e.preventDefault(); });
+
 /* ---------- Start ---------- */
 (async function start() {
   await load();

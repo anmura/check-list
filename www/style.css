@@ -228,3 +228,18 @@ h1 {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 .editor textarea.text::-webkit-scrollbar { display: none; }
+
+/* Moving an item in the editor */
+.ed-box { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.ed-line.moving, .ed-box.moving { opacity: .25; }
+.ed-ghost {
+  position: absolute; left: 0; right: 0; height: 32px; z-index: 3; pointer-events: none;
+  display: flex; align-items: center; gap: 4px; padding: 0 18px 0 14px;
+  background: var(--card); border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent);
+  box-shadow: 0 10px 24px rgba(36, 34, 26, .18); font-size: 16px; font-weight: 500;
+}
+.ed-ghost .ed-box { position: static; flex: none; margin-right: 8px; }
+.ed-ghost .ed-box::before { display: none; }
+.ed-ghost-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-ghost.on .ed-ghost-text { color: var(--done); text-decoration: line-through; }
+.ed-drop { position: absolute; left: 36px; right: 18px; height: 3px; border-radius: 2px; background: var(--accent); z-index: 2; pointer-events: none; }

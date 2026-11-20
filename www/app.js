@@ -10,12 +10,38 @@ const AppPlugin = isNative ? Plugins.App : null;
 const StatusBar = isNative ? Plugins.StatusBar : null;
 
 const STORE_KEY = 'checklist.v1';
+const THEME_KEY = 'checklist.theme';
+
+/* ---------- Light / night theme ---------- */
+let theme = 'light';
+try { if (localStorage.getItem(THEME_KEY) === 'dark') theme = 'dark'; } catch (e) { /* ignore */ }
+document.documentElement.dataset.theme = theme;
+
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  const bg = theme === 'dark' ? '#16150F' : '#F7F6F0';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', bg);
+  if (StatusBar) {
+    StatusBar.setBackgroundColor({ color: bg }).catch(() => {});
+    StatusBar.setStyle({ style: theme === 'dark' ? 'DARK' : 'LIGHT' }).catch(() => {});
+  }
+}
+
+function setTheme(next) {
+  theme = next;
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignore */ }
+  if (Prefs) Prefs.set({ key: THEME_KEY, value: theme }).catch(() => {});
+  applyTheme();
+}
 const CHANNEL_ID = 'reminders';
 
 /* ---------- Icons ---------- */
 const svg = (w, body, sw = 2) =>
   `<svg aria-hidden="true" width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 const I = {
+  moon: () => svg(20, '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"></path>'),
+  sun: () => svg(20, '<circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"></path>'),
   check: (w = 16, sw = 3) => svg(w, '<path d="M5 12.5l4.5 4.5L19 7.5"></path>', sw),
   back: () => svg(20, '<path d="M15 5l-7 7 7 7"></path>', 2.2),
   bell: (w = 22) => svg(w, '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"></path><path d="M10 20.5a2 2 0 0 0 4 0"></path>', 2.1),
@@ -308,7 +334,9 @@ function renderLists() {
     }).join('') + `<button class="new-list" data-act="new">${I.plus()}Новый список</button></div>`;
   }
   return `<div class="screen">
-    <header class="head top"></header>
+    <header class="head top"><div class="theme-row">
+      <button class="icon-btn" data-act="theme" aria-label="${theme === 'dark' ? 'Светлая тема' : 'Ночная тема'}">${theme === 'dark' ? I.sun() : I.moon()}</button>
+    </div></header>
     <main class="body">${body}</main>
   </div>`;
 }
@@ -490,6 +518,7 @@ app.addEventListener('click', async (e) => {
   const list = byId(ui.listId);
 
   switch (act) {
+    case 'theme': setTheme(theme === 'dark' ? 'light' : 'dark'); return render();
     case 'open': return go('list', el.dataset.id);
     case 'lists': return go('lists');
     case 'new': return go('new');
@@ -832,8 +861,11 @@ app.addEventListener('contextmenu', (e) => { if (e.target.closest('.ed-box')) e.
   }
 
   if (StatusBar) {
-    StatusBar.setBackgroundColor({ color: '#F7F6F0' }).catch(() => {});
-    StatusBar.setStyle({ style: 'LIGHT' }).catch(() => {});
+    try {
+      const v = Prefs ? (await Prefs.get({ key: THEME_KEY })).value : null;
+      if (v === 'dark' || v === 'light') { theme = v; render(); }
+    } catch (e) { /* keep the local choice */ }
+    applyTheme();
   }
 
   if (AppPlugin) {

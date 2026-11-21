@@ -850,6 +850,125 @@ document.addEventListener('mousemove', edPressMove);
 document.addEventListener('mouseup', edPressEnd);
 app.addEventListener('contextmenu', (e) => { if (e.target.closest('.ed-box')) e.preventDefault(); });
 
+/* ---------- Move items in a list: hold an item, then drag ---------- */
+let liPress = null;
+let liDrag = null;
+
+function liPressStart(e) {
+  if (liDrag || ui.screen !== 'list' || ui.sheet) return;
+  if (e.type === 'mousedown' && (e.button !== 0 || Date.now() - lastTouch < 800)) return;
+  const item = e.target.closest('.card .item');
+  if (!item) return;
+  if (e.type === 'touchstart') lastTouch = Date.now();
+  const p = pointOf(e);
+  liPress = { item, x: p.x, y: p.y };
+  liPress.timer = setTimeout(() => { if (liPress) liStartDrag(liPress.item, liPress.y); }, HOLD_MS);
+}
+
+function liStartDrag(item, y) {
+  liPress = null;
+  const card = item.closest('.card');
+  const body = app.querySelector('.body');
+  const children = [...card.children];
+  const from = children.indexOf(item);
+  if (from < 0) return;
+  const rows = children.map((c) => ({ top: c.offsetTop, h: c.offsetHeight }));
+  const cr = card.getBoundingClientRect();
+  const grab = (y - cr.top) - rows[from].top;
+  const ghost = document.createElement('div');
+  ghost.className = 'li-ghost' + (item.classList.contains('done') ? ' done' : '');
+  ghost.innerHTML = `<span class="box">${I.check(11, 3.4)}</span><span class="name"></span>`;
+  ghost.querySelector('.name').textContent = item.querySelector('.name').textContent;
+  ghost.style.height = rows[from].h + 'px';
+  const drop = document.createElement('div');
+  drop.className = 'li-drop';
+  card.append(ghost, drop);
+  item.classList.add('moving');
+  liDrag = { card, body, from, to: from, rows, grab, ghost, drop, y };
+  try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) { /* ignore */ }
+  liLayout();
+  liDrag.raf = requestAnimationFrame(liAutoScroll);
+}
+
+function liLayout() {
+  const d = liDrag;
+  const cr = d.card.getBoundingClientRect();
+  const yIn = d.y - cr.top;
+  const maxTop = d.card.clientHeight - d.rows[d.from].h;
+  d.ghost.style.top = `${Math.max(0, Math.min(maxTop, yIn - d.grab))}px`;
+  let to = d.rows.length;
+  for (let k = 0; k < d.rows.length; k++) {
+    if (yIn < d.rows[k].top + d.rows[k].h / 2) { to = k; break; }
+  }
+  d.to = to;
+  const last = d.rows[d.rows.length - 1];
+  const lineTop = to < d.rows.length ? d.rows[to].top : last.top + last.h;
+  d.drop.style.top = `${lineTop - 1}px`;
+  d.drop.hidden = (to === d.from || to === d.from + 1);
+}
+
+function liAutoScroll() {
+  if (!liDrag) return;
+  const r = liDrag.body.getBoundingClientRect();
+  let v = 0;
+  if (liDrag.y < r.top + EDGE) v = -MAX_SPEED * Math.min(1, (r.top + EDGE - liDrag.y) / EDGE);
+  else if (liDrag.y > r.bottom - EDGE) v = MAX_SPEED * Math.min(1, (liDrag.y - (r.bottom - EDGE)) / EDGE);
+  if (v) {
+    const before = liDrag.body.scrollTop;
+    liDrag.body.scrollTop = before + v;
+    if (liDrag.body.scrollTop !== before) liLayout();
+  }
+  liDrag.raf = requestAnimationFrame(liAutoScroll);
+}
+
+function liPressMove(e) {
+  if (liDrag) {
+    if (e.cancelable) e.preventDefault();
+    liDrag.y = pointOf(e).y;
+    liLayout();
+    return;
+  }
+  if (!liPress) return;
+  const p = pointOf(e);
+  if (Math.abs(p.x - liPress.x) > MOVE_TOL || Math.abs(p.y - liPress.y) > MOVE_TOL) {
+    clearTimeout(liPress.timer);
+    liPress = null;
+  }
+}
+
+function liPressEnd() {
+  if (liPress) { clearTimeout(liPress.timer); liPress = null; }
+  if (!liDrag) return;
+  const { from, to, body } = liDrag;
+  cancelAnimationFrame(liDrag.raf);
+  liDrag = null;
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; }, 350);
+  const list = byId(ui.listId);
+  const scroll = body.scrollTop;
+  if (list && to !== from && to !== from + 1) {
+    const lines = list.text.split('\n');
+    let lead = 0;
+    while (lead < lines.length && !lines[lead].trim()) lead++;
+    const [moved] = lines.splice(from + lead, 1);
+    lines.splice((to > from ? to - 1 : to) + lead, 0, moved);
+    list.text = lines.join('\n');
+    save();
+  }
+  render();
+  const nb = app.querySelector('.body');
+  if (nb) nb.scrollTop = scroll;
+}
+
+app.addEventListener('touchstart', liPressStart, { passive: true });
+document.addEventListener('touchmove', liPressMove, { passive: false });
+document.addEventListener('touchend', liPressEnd);
+document.addEventListener('touchcancel', liPressEnd);
+app.addEventListener('mousedown', liPressStart);
+document.addEventListener('mousemove', liPressMove);
+document.addEventListener('mouseup', liPressEnd);
+app.addEventListener('contextmenu', (e) => { if (e.target.closest('.card .item')) e.preventDefault(); });
+
 /* ---------- Start ---------- */
 (async function start() {
   await load();
